@@ -6,12 +6,13 @@ import (
 )
 
 type Bucket map[string]interface{}
-type DoFunc func(interface{})
+type DoFunc func(interface{}, interface{})
 type HashFunc func(string) int
 
 type Hash struct {
     buckets  []Bucket
     size     int
+    count    int
     mutex    sync.RWMutex
     hashFunc HashFunc
 }
@@ -20,6 +21,7 @@ func NewHash(size int, f HashFunc) *Hash {
     h := new(Hash)
     h.mutex = sync.RWMutex{}
     h.size = size
+    h.count = 0
     h.buckets = make([]Bucket, size, size)
     h.hashFunc = f
 
@@ -37,14 +39,7 @@ func NewHash(size int, f HashFunc) *Hash {
 func (h *Hash) Count() int {
     h.mutex.RLock()
     defer h.mutex.RUnlock()
-    count := 0
-    for i := 0; i < h.size ; i++ {
-        for _, _ = range h.buckets[i] {
-            count++
-        }
-    }
-
-    return count
+    return h.count
 }
 
 func (h *Hash) Add(key string, value interface{}) {
@@ -52,6 +47,7 @@ func (h *Hash) Add(key string, value interface{}) {
     defer h.mutex.Unlock()
     idx := h.hashFunc(key)
     h.buckets[idx][key] = value
+    h.count++
 }
 
 func (h *Hash) Get(key string) interface{} {
@@ -71,15 +67,16 @@ func (h *Hash) Delete(key string) {
     idx := h.hashFunc(key)
     if _, ok := h.buckets[idx][key]; ok {
         delete(h.buckets[idx], key)
+        h.count--
     }
 }
 
-func (h *Hash) DoAll(f DoFunc) {
+func (h *Hash) DoAll(f DoFunc, ctx interface{}) {
     h.mutex.RLock()
     defer h.mutex.RUnlock()
     for i := 0; i < h.size ; i++ {
         for _, value := range h.buckets[i] {
-            f(value)
+            f(ctx, value)
         }
     }
 }
